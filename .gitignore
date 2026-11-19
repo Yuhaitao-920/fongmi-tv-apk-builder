@@ -1,0 +1,6 @@
+app-source/.git
+app-source/local.properties
+app-source/build/
+app-source/.gradle/
+*.apk
+.DS_Store

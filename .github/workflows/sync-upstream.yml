@@ -1,0 +1,41 @@
+name: Sync upstream source
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: 'Upstream branch or commit'
+        required: false
+        default: 'fongmi'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+
+      - name: Clone upstream source
+        run: |
+          rm -rf app-source
+          git clone --depth 1 --branch "${{ github.event.inputs.upstream_ref }}" \
+            https://github.com/FongMi/TV.git app-source
+          SHA=$(git -C app-source rev-parse HEAD)
+          echo "UPSTREAM_SHA=$SHA" >> "$GITHUB_ENV"
+          rm -rf app-source/.git
+          echo "Upstream commit: $SHA"
+
+      - name: Commit synced source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No upstream changes."
+          else
+            git commit -m "Sync FongMi/TV upstream ${UPSTREAM_SHA:0:12}"
+            git push
+          fi
