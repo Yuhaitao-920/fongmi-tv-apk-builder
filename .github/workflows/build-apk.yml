@@ -61,9 +61,8 @@ jobs:
           SDKMANAGER=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
           echo "sdkmanager: $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses || true
-          # android-37 / build-tools 37 are Preview packages (not in the stable channel),
-          # so use --channel=0 to include all channels.
-          "$SDKMANAGER" --channel=0 "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+          # API 37 platform package name is "android-37.0" (SDK manager has no bare "android-37").
+          "$SDKMANAGER" "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Set up Python 3.10 (ChaquoPy)
         uses: actions/setup-python@v5
