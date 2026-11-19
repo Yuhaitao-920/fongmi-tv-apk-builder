@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Build flavor'
+        description: 'Build flavor (device type)'
         required: true
-        default: 'mobileArm64_v8a'
+        default: 'mobile'
         type: choice
         options:
-          - mobileArm64_v8a
-          - mobileArmeabi_v7a
-          - leanbackArm64_v8a
-          - leanbackArmeabi_v7a
+          - mobile
+          - leanback
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'Debug'
+        type: choice
+        options:
+          - Debug
+          - Release
       create_release:
-        description: 'Create a GitHub Release with the APK'
+        description: 'Create a GitHub Release with the APK(s)'
         required: false
         default: false
         type: boolean
@@ -34,11 +40,12 @@ jobs:
       - name: Prepare source tree
         run: |
           if [ -f app-source/gradlew ]; then
-            echo "Using synced app-source/ (commit: $(git -C app-source log -1 --oneline 2>/dev/null || echo unknown))"
+            echo "Using synced app-source/ ($(git -C app-source log -1 --oneline 2>/dev/null || echo 'no git history'))"
           else
-            echo "app-source is empty; cloning upstream for this build"
+            echo "app-source is empty; cloning upstream FongMi/TV@fongmi for this build"
             git clone --depth 1 --branch fongmi https://github.com/FongMi/TV.git app-source
           fi
+          grep -E 'versionName|versionCode' app-source/app/build.gradle | head -5
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -54,7 +61,7 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0"
           yes | sdkmanager --licenses || true
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.10 (ChaquoPy)
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
@@ -65,36 +72,41 @@ jobs:
       - name: Build APK
         working-directory: app-source
         run: |
-          FLAVOR="${{ github.event.inputs.flavor || 'mobileArm64_v8a' }}"
-          TASK=":app:assemble${FLAVOR}Debug"
+          FLAVOR="${{ github.event.inputs.flavor || 'mobile' }}"
+          TYPE="${{ github.event.inputs.build_type || 'Debug' }}"
+          TASK=":app:assemble$(echo "$FLAVOR" | sed 's/^./\U&/')${TYPE}"
           echo "Running $TASK"
-          bash gradlew "$TASK" --no-daemon
+          bash gradlew "$TASK" --no-daemon --stacktrace
 
-      - name: Locate APK
+      - name: Collect APKs
         id: apk
         run: |
-          FLAVOR="${{ github.event.inputs.flavor || 'mobileArm64_v8a' }}"
-          APK=$(find app-source/app/build/outputs/apk -type f -name '*.apk' | head -n 1)
-          if [ -z "$APK" ]; then
-            echo "No APK found for $FLAVOR" >&2
+          FLAVOR="${{ github.event.inputs.flavor || 'mobile' }}"
+          TYPE="${{ github.event.inputs.build_type || 'Debug' }}"
+          LOWER_TYPE=$(echo "$TYPE" | tr '[:upper:]' '[:lower:]')
+          OUTDIR="app-source/app/build/outputs/apk/${FLAVOR}/${LOWER_TYPE}"
+          echo "Looking in $OUTDIR"
+          find "$OUTDIR" -type f -name '*.apk' -printf '%p\n' 2>/dev/null || true
+          COUNT=$(find "$OUTDIR" -type f -name '*.apk' 2>/dev/null | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No APK found in $OUTDIR" >&2
             exit 1
           fi
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$APK")" >> "$GITHUB_OUTPUT"
-          ls -lh "$APK"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk-${{ github.event.inputs.flavor || 'mobileArm64_v8a' }}
-          path: ${{ steps.apk.outputs.path }}
+          name: fongmi-tv-${{ github.event.inputs.flavor || 'mobile' }}-${{ github.event.inputs.build_type || 'Debug' }}
+          path: app-source/app/build/outputs/apk/${{ github.event.inputs.flavor || 'mobile' }}/${{ github.event.inputs.build_type == 'Release' && 'release' || 'debug' }}/**/*.apk
+          if-no-files-found: error
 
       - name: Create release
         if: ${{ github.event.inputs.create_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
-          name: APK build ${{ github.run_number }}
-          files: ${{ steps.apk.outputs.path }}
+          name: FongMi TV build ${{ github.run_number }}
+          files: app-source/app/build/outputs/apk/${{ github.event.inputs.flavor || 'mobile' }}/${{ github.event.inputs.build_type == 'Release' && 'release' || 'debug' }}/**/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
