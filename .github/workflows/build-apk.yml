@@ -53,13 +53,15 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
+        # ubuntu-latest runners ship with Android SDK + cmdline-tools preinstalled;
+        # avoid android-actions/setup-android, which still installs the removed 'tools' package.
         run: |
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0"
-          yes | sdkmanager --licenses || true
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          SDKMANAGER=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          echo "sdkmanager: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-37" "build-tools;37.0.0"
 
       - name: Set up Python 3.10 (ChaquoPy)
         uses: actions/setup-python@v5
