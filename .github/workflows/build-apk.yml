@@ -45,6 +45,18 @@ jobs:
             echo "app-source is empty; cloning upstream FongMi/TV@fongmi for this build"
             git clone --depth 1 --branch fongmi https://github.com/FongMi/TV.git app-source
           fi
+          # Upstream .gitignore excludes *.properties, so gradle-wrapper.properties
+          # is not committed. Recreate it (Gradle 9.7.1 per upstream) if missing.
+          if [ ! -f app-source/gradle/wrapper/gradle-wrapper.properties ]; then
+            echo "Recreating gradle-wrapper.properties"
+            printf '%s\n' \
+              'distributionBase=GRADLE_USER_HOME' \
+              'distributionPath=wrapper/dists' \
+              'distributionUrl=https\://services.gradle.org/distributions/gradle-9.7.1-bin.zip' \
+              'zipStoreBase=GRADLE_USER_HOME' \
+              'zipStorePath=wrapper/dists' \
+              > app-source/gradle/wrapper/gradle-wrapper.properties
+          fi
           grep -E 'versionName|versionCode' app-source/app/build.gradle | head -5
 
       - name: Set up JDK 21
