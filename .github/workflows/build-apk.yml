@@ -81,8 +81,23 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Write local.properties
-        run: printf 'sdk.dir=%s\n' "$ANDROID_HOME" > app-source/local.properties
+      - name: Write local.properties and generate signing keystore
+        run: |
+          # Upstream build.gradle requires a release signing config even for debug builds,
+          # and keystore files are gitignored. Generate a throwaway self-signed keystore.
+          keytool -genkeypair -v \
+            -keystore app-source/app/debug-build.jks \
+            -alias fongmi -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=FongMi Build, OU=CI, O=OpenSource, L=NA, ST=NA, C=CN" >/dev/null 2>&1
+          cat > app-source/local.properties <<EOF
+          sdk.dir=$ANDROID_HOME
+          storeFile=app/debug-build.jks
+          keyAlias=fongmi
+          storePassword=android
+          keyPassword=android
+          EOF
+          echo "local.properties written; keystore generated."
 
       - name: Build APK
         working-directory: app-source
